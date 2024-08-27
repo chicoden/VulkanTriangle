@@ -215,7 +215,6 @@ private:
                 this->physicalDevice = device;
                 this->queueFamilyIndices = deviceQueueFamilyIndices;
                 currentBestScore = deviceScore;
-                break;
             }
         }
 
