@@ -614,6 +614,7 @@ int main() {
         if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &create_info, NULL, &graphics_pipeline) != VK_SUCCESS) die("vkCreateGraphicsPipelines");
     }
 
+    // --- CREATE FRAMEBUFFERS FOR SWAPCHAIN IMAGES ---
     VkFramebuffer* swapchain_framebuffers = alloc(VkFramebuffer, image_count);
     for (uint32_t i = 0; i < image_count; i++) {
         VkFramebufferCreateInfo create_info = {};
@@ -627,23 +628,77 @@ int main() {
         if (vkCreateFramebuffer(device, &create_info, NULL, &swapchain_framebuffers[i]) != VK_SUCCESS) die("vkCreateFramebuffer");
     }
 
-    // --- INITIALIZE VIEWPORT AND SCISSOR RECTS ---
-    /*VkViewport viewport = {};
-    viewport.x = 0.0f;
-    viewport.y = 0.0f;
-    viewport.width = (float)extent.width;
-    viewport.height = (float)extent.height;
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 1.0f;
+    // --- CREATE COMMAND POOL TO ALLOCATE COMMAND BUFFERS IN ---
+    VkCommandPool command_pool;
+    {
+        VkCommandPoolCreateInfo create_info = {};
+        create_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        create_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+        create_info.queueFamilyIndex = queue_family_indices[GRAPHICS_FAMILY_INDEX].value;
+        if (vkCreateCommandPool(device, &create_info, NULL, &command_pool) != VK_SUCCESS) die("vkCreateCommandPool");
+    }
 
-    VkRect2D scissor = {};
-    scissor.offset.x = 0;
-    scissor.offset.y = 0;
-    scissor.extent = extent;*/
+    // --- ALLOCATE A COMMAND BUFFER ---
+    VkCommandBuffer command_buffer;
+    {
+        VkCommandBufferAllocateInfo alloc_info = {};
+        alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        alloc_info.commandPool = command_pool;
+        alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        alloc_info.commandBufferCount = 1;
+        if (vkAllocateCommandBuffers(device, &alloc_info, &command_buffer) != VK_SUCCESS) die("vkAllocateCommandBuffers");
+    }
+
+    /**/{
+        uint32_t i = 0;
+
+        VkCommandBufferBeginInfo begin_info = {};
+        begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        begin_info.flags = 0;
+        begin_info.pInheritanceInfo = NULL;
+        if (vkBeginCommandBuffer(command_buffer, &begin_info) != VK_SUCCESS) die("vkBeginCommandBuffer");
+
+        VkClearValue clear_color = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
+        VkRenderPassBeginInfo renderpass_info = {};
+        renderpass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        renderpass_info.renderPass = renderpass;
+        renderpass_info.framebuffer = swapchain_framebuffers[i];
+        renderpass_info.renderArea.offset.x = 0;
+        renderpass_info.renderArea.offset.y = 0;
+        renderpass_info.renderArea.extent = extent;
+        renderpass_info.clearValueCount = 1;
+        renderpass_info.pClearValues = &clear_color;
+        vkCmdBeginRenderPass(command_buffer, &renderpass_info, VK_SUBPASS_CONTENTS_INLINE);
+
+        vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipeline);
+
+        VkViewport viewport = {};
+        viewport.x = 0.0f;
+        viewport.y = 0.0f;
+        viewport.width = (float)extent.width;
+        viewport.height = (float)extent.height;
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+        vkCmdSetViewport(command_buffer, 0, 1, &viewport);
+
+        VkRect2D scissor = {};
+        scissor.offset.x = 0;
+        scissor.offset.y = 0;
+        scissor.extent = extent;
+        vkCmdSetScissor(command_buffer, 0, 1, &scissor);
+
+        vkCmdDraw(command_buffer, 3, 1, 0, 0);
+
+        vkCmdEndRenderPass(command_buffer);
+
+        if (vkEndCommandBuffer(command_buffer) != VK_SUCCESS) die("vkEndCommandBuffer");
+    }/**/
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
     }
+
+    vkDestroyCommandPool(device, command_pool, NULL);
 
     for (uint32_t i = 0; i < image_count; i++) {
         vkDestroyFramebuffer(device, swapchain_framebuffers[i], NULL);
