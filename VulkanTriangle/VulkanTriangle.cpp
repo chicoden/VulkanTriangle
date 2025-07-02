@@ -455,20 +455,6 @@ int main() {
         if (result != VK_SUCCESS) die("vkCreateShaderModule frag");
     }
 
-    // --- INITIALIZE VIEWPORT AND SCISSOR RECTS ---
-    /*VkViewport viewport = {};
-    viewport.x = 0.0f;
-    viewport.y = 0.0f;
-    viewport.width = (float)extent.width;
-    viewport.height = (float)extent.height;
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 1.0f;
-
-    VkRect2D scissor = {};
-    scissor.offset.x = 0;
-    scissor.offset.y = 0;
-    scissor.extent = extent;*/
-
     // --- CREATE RENDERPASS ---
     VkRenderPass renderpass;
     {
@@ -628,9 +614,42 @@ int main() {
         if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &create_info, NULL, &graphics_pipeline) != VK_SUCCESS) die("vkCreateGraphicsPipelines");
     }
 
+    VkFramebuffer* swapchain_framebuffers = alloc(VkFramebuffer, image_count);
+    for (uint32_t i = 0; i < image_count; i++) {
+        VkFramebufferCreateInfo create_info = {};
+        create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        create_info.renderPass = renderpass;
+        create_info.attachmentCount = 1;
+        create_info.pAttachments = &swapchain_image_views[i];
+        create_info.width = extent.width;
+        create_info.height = extent.height;
+        create_info.layers = 1;
+        if (vkCreateFramebuffer(device, &create_info, NULL, &swapchain_framebuffers[i]) != VK_SUCCESS) die("vkCreateFramebuffer");
+    }
+
+    // --- INITIALIZE VIEWPORT AND SCISSOR RECTS ---
+    /*VkViewport viewport = {};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = (float)extent.width;
+    viewport.height = (float)extent.height;
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+
+    VkRect2D scissor = {};
+    scissor.offset.x = 0;
+    scissor.offset.y = 0;
+    scissor.extent = extent;*/
+
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
     }
+
+    for (uint32_t i = 0; i < image_count; i++) {
+        vkDestroyFramebuffer(device, swapchain_framebuffers[i], NULL);
+    }
+
+    free(swapchain_framebuffers);
 
     vkDestroyPipeline(device, graphics_pipeline, NULL);
     vkDestroyPipelineLayout(device, pipeline_layout, NULL);
