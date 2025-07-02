@@ -477,12 +477,22 @@ int main() {
         subpass.colorAttachmentCount = 1;
         subpass.pColorAttachments = &color_attachment_ref;
 
+        VkSubpassDependency dependency = {};
+        dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+        dependency.dstSubpass = 0;
+        dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependency.srcAccessMask = 0;
+        dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
         VkRenderPassCreateInfo create_info = {};
         create_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
         create_info.attachmentCount = 1;
         create_info.pAttachments = &color_attachment;
         create_info.subpassCount = 1;
         create_info.pSubpasses = &subpass;
+        create_info.dependencyCount = 1;
+        create_info.pDependencies = &dependency;
         if (vkCreateRenderPass(device, &create_info, NULL, &renderpass) != VK_SUCCESS) die("vkCreateRenderPass");
     }
 
@@ -649,55 +659,120 @@ int main() {
         if (vkAllocateCommandBuffers(device, &alloc_info, &command_buffer) != VK_SUCCESS) die("vkAllocateCommandBuffers");
     }
 
-    /**/{
-        uint32_t i = 0;
+    // --- CREATE SYNCHRONIZATION OBJECTS ---
+    VkSemaphore image_avail_semaphore;
+    VkSemaphore render_finish_semaphore;
+    VkFence in_flight_fence;
+    {
+        VkSemaphoreCreateInfo semaphore_create_info = {};
+        semaphore_create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-        VkCommandBufferBeginInfo begin_info = {};
-        begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        begin_info.flags = 0;
-        begin_info.pInheritanceInfo = NULL;
-        if (vkBeginCommandBuffer(command_buffer, &begin_info) != VK_SUCCESS) die("vkBeginCommandBuffer");
+        VkFenceCreateInfo fence_create_info = {};
+        fence_create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fence_create_info.flags = VK_FENCE_CREATE_SIGNALED_BIT; // Make first wait a no-op since there won't be a frame in flight
 
-        VkClearValue clear_color = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
-        VkRenderPassBeginInfo renderpass_info = {};
-        renderpass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        renderpass_info.renderPass = renderpass;
-        renderpass_info.framebuffer = swapchain_framebuffers[i];
-        renderpass_info.renderArea.offset.x = 0;
-        renderpass_info.renderArea.offset.y = 0;
-        renderpass_info.renderArea.extent = extent;
-        renderpass_info.clearValueCount = 1;
-        renderpass_info.pClearValues = &clear_color;
-        vkCmdBeginRenderPass(command_buffer, &renderpass_info, VK_SUBPASS_CONTENTS_INLINE);
-
-        vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipeline);
-
-        VkViewport viewport = {};
-        viewport.x = 0.0f;
-        viewport.y = 0.0f;
-        viewport.width = (float)extent.width;
-        viewport.height = (float)extent.height;
-        viewport.minDepth = 0.0f;
-        viewport.maxDepth = 1.0f;
-        vkCmdSetViewport(command_buffer, 0, 1, &viewport);
-
-        VkRect2D scissor = {};
-        scissor.offset.x = 0;
-        scissor.offset.y = 0;
-        scissor.extent = extent;
-        vkCmdSetScissor(command_buffer, 0, 1, &scissor);
-
-        vkCmdDraw(command_buffer, 3, 1, 0, 0);
-
-        vkCmdEndRenderPass(command_buffer);
-
-        if (vkEndCommandBuffer(command_buffer) != VK_SUCCESS) die("vkEndCommandBuffer");
-    }/**/
+        if (
+            vkCreateSemaphore(device, &semaphore_create_info, NULL, &image_avail_semaphore) != VK_SUCCESS ||
+            vkCreateSemaphore(device, &semaphore_create_info, NULL, &render_finish_semaphore) != VK_SUCCESS ||
+            vkCreateFence(device, &fence_create_info, NULL, &in_flight_fence) != VK_SUCCESS
+        ) {
+            die("creating sync objects");
+        }
+    }
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
+
+        // Wait for previous "in flight" frame to complete
+        vkWaitForFences(device, 1, &in_flight_fence, VK_TRUE, UINT64_MAX);
+        vkResetFences(device, 1, &in_flight_fence);
+
+        // Acquire next swapchain image to render to
+        uint32_t image_index;
+        vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, image_avail_semaphore, VK_NULL_HANDLE, &image_index);
+
+        // Record command buffer
+        {
+            vkResetCommandBuffer(command_buffer, 0);
+
+            VkCommandBufferBeginInfo begin_info = {};
+            begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            begin_info.flags = 0;
+            begin_info.pInheritanceInfo = NULL;
+            if (vkBeginCommandBuffer(command_buffer, &begin_info) != VK_SUCCESS) die("vkBeginCommandBuffer");
+
+            VkClearValue clear_color = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
+            VkRenderPassBeginInfo renderpass_info = {};
+            renderpass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+            renderpass_info.renderPass = renderpass;
+            renderpass_info.framebuffer = swapchain_framebuffers[image_index];
+            renderpass_info.renderArea.offset.x = 0;
+            renderpass_info.renderArea.offset.y = 0;
+            renderpass_info.renderArea.extent = extent;
+            renderpass_info.clearValueCount = 1;
+            renderpass_info.pClearValues = &clear_color;
+            vkCmdBeginRenderPass(command_buffer, &renderpass_info, VK_SUBPASS_CONTENTS_INLINE);
+
+            vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipeline);
+
+            VkViewport viewport = {};
+            viewport.x = 0.0f;
+            viewport.y = 0.0f;
+            viewport.width = (float)extent.width;
+            viewport.height = (float)extent.height;
+            viewport.minDepth = 0.0f;
+            viewport.maxDepth = 1.0f;
+            vkCmdSetViewport(command_buffer, 0, 1, &viewport);
+
+            VkRect2D scissor = {};
+            scissor.offset.x = 0;
+            scissor.offset.y = 0;
+            scissor.extent = extent;
+            vkCmdSetScissor(command_buffer, 0, 1, &scissor);
+
+            vkCmdDraw(command_buffer, 3, 1, 0, 0);
+
+            vkCmdEndRenderPass(command_buffer);
+
+            if (vkEndCommandBuffer(command_buffer) != VK_SUCCESS) die("vkEndCommandBuffer");
+        }
+
+        // Submit command buffer
+        {
+            VkSubmitInfo submit_info = {};
+            submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+            VkPipelineStageFlags wait_stages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+            submit_info.waitSemaphoreCount = 1;
+            submit_info.pWaitSemaphores = &image_avail_semaphore;
+            submit_info.pWaitDstStageMask = wait_stages;
+
+            submit_info.commandBufferCount = 1;
+            submit_info.pCommandBuffers = &command_buffer;
+
+            submit_info.signalSemaphoreCount = 1;
+            submit_info.pSignalSemaphores = &render_finish_semaphore;
+
+            if (vkQueueSubmit(graphics_queue, 1, &submit_info, in_flight_fence) != VK_SUCCESS) die("vkQueueSubmit");
+        }
+
+        // Prepare for presentation
+        VkPresentInfoKHR present_info = {};
+        present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+        present_info.waitSemaphoreCount = 1;
+        present_info.pWaitSemaphores = &render_finish_semaphore;
+        present_info.swapchainCount = 1;
+        present_info.pSwapchains = &swapchain;
+        present_info.pImageIndices = &image_index;
+        present_info.pResults = NULL;
+        vkQueuePresentKHR(present_queue, &present_info);
     }
 
+    vkDeviceWaitIdle(device);
+
+    vkDestroyFence(device, in_flight_fence, NULL);
+    vkDestroySemaphore(device, render_finish_semaphore, NULL);
+    vkDestroySemaphore(device, image_avail_semaphore, NULL);
     vkDestroyCommandPool(device, command_pool, NULL);
 
     for (uint32_t i = 0; i < image_count; i++) {
