@@ -212,16 +212,21 @@ int main() {
         vkGetPhysicalDeviceQueueFamilyProperties(gpu, &queue_family_prop_count, queue_family_props);
 
         for (uint32_t i = 0; i < queue_family_prop_count; i++) {
-            if (!queue_family_indices[GRAPHICS_FAMILY_INDEX].has_value && queue_family_props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-                queue_family_indices[GRAPHICS_FAMILY_INDEX].has_value = 1;
-                queue_family_indices[GRAPHICS_FAMILY_INDEX].value = i;
-            }
+            if (
+                !(queue_family_indices[GRAPHICS_FAMILY_INDEX].has_value && queue_family_indices[PRESENT_FAMILY_INDEX].has_value) ||
+                queue_family_indices[GRAPHICS_FAMILY_INDEX].value != queue_family_indices[PRESENT_FAMILY_INDEX].value
+            ) {
+                if (queue_family_props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+                    queue_family_indices[GRAPHICS_FAMILY_INDEX].has_value = 1;
+                    queue_family_indices[GRAPHICS_FAMILY_INDEX].value = i;
+                }
 
-            VkBool32 present_support = VK_FALSE;
-            vkGetPhysicalDeviceSurfaceSupportKHR(gpu, i, surface, &present_support);
-            if (!queue_family_indices[PRESENT_FAMILY_INDEX].has_value && present_support) {
-                queue_family_indices[PRESENT_FAMILY_INDEX].has_value = 1;
-                queue_family_indices[PRESENT_FAMILY_INDEX].value = i;
+                VkBool32 present_support = VK_FALSE;
+                vkGetPhysicalDeviceSurfaceSupportKHR(gpu, i, surface, &present_support);
+                if (present_support) {
+                    queue_family_indices[PRESENT_FAMILY_INDEX].has_value = 1;
+                    queue_family_indices[PRESENT_FAMILY_INDEX].value = i;
+                }
             }
         }
 
@@ -318,7 +323,7 @@ int main() {
         vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &format_count, formats);
 
         for (uint32_t i = 0; i < format_count; i++) {
-            if (formats[i].format == VK_FORMAT_R8G8B8A8_SRGB && formats[i].colorSpace == VK_COLORSPACE_SRGB_NONLINEAR_KHR) {
+            if (formats[i].format == VK_FORMAT_B8G8R8A8_SRGB && formats[i].colorSpace == VK_COLORSPACE_SRGB_NONLINEAR_KHR) {
                 format = formats[i];
                 have_suitable_format = 1;
                 break;
@@ -361,15 +366,15 @@ int main() {
         create_info.imageArrayLayers = 1;
         create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-        uint32_t qf_indices[2] = { queue_family_indices[GRAPHICS_FAMILY_INDEX].value, queue_family_indices[PRESENT_FAMILY_INDEX].value };
-        if (qf_indices[0] != qf_indices[1]) {
-            create_info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-            create_info.queueFamilyIndexCount = 2;
-            create_info.pQueueFamilyIndices = qf_indices;
-        } else {
+        uint32_t graphics_and_present_indices[2] = { queue_family_indices[GRAPHICS_FAMILY_INDEX].value, queue_family_indices[PRESENT_FAMILY_INDEX].value };
+        if (graphics_and_present_indices[0] == graphics_and_present_indices[1]) {
             create_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
             create_info.queueFamilyIndexCount = 0;
             create_info.pQueueFamilyIndices = NULL;
+        } else {
+            create_info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+            create_info.queueFamilyIndexCount = 2;
+            create_info.pQueueFamilyIndices = graphics_and_present_indices;
         }
 
         create_info.preTransform = capabilities.currentTransform;
@@ -660,8 +665,8 @@ int main() {
     }
 
     // --- CREATE SYNCHRONIZATION OBJECTS ---
-    VkSemaphore image_avail_semaphore;
-    VkSemaphore render_finish_semaphore;
+    VkSemaphore image_available_sema;
+    VkSemaphore render_finished_sema;
     VkFence in_flight_fence;
     {
         VkSemaphoreCreateInfo semaphore_create_info = {};
@@ -672,8 +677,8 @@ int main() {
         fence_create_info.flags = VK_FENCE_CREATE_SIGNALED_BIT; // Make first wait a no-op since there won't be a frame in flight
 
         if (
-            vkCreateSemaphore(device, &semaphore_create_info, NULL, &image_avail_semaphore) != VK_SUCCESS ||
-            vkCreateSemaphore(device, &semaphore_create_info, NULL, &render_finish_semaphore) != VK_SUCCESS ||
+            vkCreateSemaphore(device, &semaphore_create_info, NULL, &image_available_sema) != VK_SUCCESS ||
+            vkCreateSemaphore(device, &semaphore_create_info, NULL, &render_finished_sema) != VK_SUCCESS ||
             vkCreateFence(device, &fence_create_info, NULL, &in_flight_fence) != VK_SUCCESS
         ) {
             die("creating sync objects");
@@ -689,7 +694,7 @@ int main() {
 
         // Acquire next swapchain image to render to
         uint32_t image_index;
-        vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, image_avail_semaphore, VK_NULL_HANDLE, &image_index);
+        vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, image_available_sema, VK_NULL_HANDLE, &image_index);
 
         // Record command buffer
         {
@@ -744,14 +749,14 @@ int main() {
 
             VkPipelineStageFlags wait_stages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
             submit_info.waitSemaphoreCount = 1;
-            submit_info.pWaitSemaphores = &image_avail_semaphore;
+            submit_info.pWaitSemaphores = &image_available_sema;
             submit_info.pWaitDstStageMask = wait_stages;
 
             submit_info.commandBufferCount = 1;
             submit_info.pCommandBuffers = &command_buffer;
 
             submit_info.signalSemaphoreCount = 1;
-            submit_info.pSignalSemaphores = &render_finish_semaphore;
+            submit_info.pSignalSemaphores = &render_finished_sema;
 
             if (vkQueueSubmit(graphics_queue, 1, &submit_info, in_flight_fence) != VK_SUCCESS) die("vkQueueSubmit");
         }
@@ -760,7 +765,7 @@ int main() {
         VkPresentInfoKHR present_info = {};
         present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
         present_info.waitSemaphoreCount = 1;
-        present_info.pWaitSemaphores = &render_finish_semaphore;
+        present_info.pWaitSemaphores = &render_finished_sema;
         present_info.swapchainCount = 1;
         present_info.pSwapchains = &swapchain;
         present_info.pImageIndices = &image_index;
@@ -771,8 +776,8 @@ int main() {
     vkDeviceWaitIdle(device);
 
     vkDestroyFence(device, in_flight_fence, NULL);
-    vkDestroySemaphore(device, render_finish_semaphore, NULL);
-    vkDestroySemaphore(device, image_avail_semaphore, NULL);
+    vkDestroySemaphore(device, render_finished_sema, NULL);
+    vkDestroySemaphore(device, image_available_sema, NULL);
     vkDestroyCommandPool(device, command_pool, NULL);
 
     for (uint32_t i = 0; i < image_count; i++) {
