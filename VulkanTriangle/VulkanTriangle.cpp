@@ -3,12 +3,8 @@
 #define _CRTDBG_MAP_ALLOC
 #include <crtdbg.h>
 
-#define vkCreateDebugUtilsMessengerEXT _vkCreateDebugUtilsMessengerEXT
-#define vkDestroyDebugUtilsMessengerEXT _vkDestroyDebugUtilsMessengerEXT
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
-#undef vkCreateDebugUtilsMessengerEXT
-#undef vkDestroyDebugUtilsMessengerEXT
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -17,18 +13,6 @@
 
 #define alloc(type, count) (type*)malloc((count) * sizeof(type))
 #define clamp(x, min, max) ((x) < (min) ? (min) : ((x) > (max) ? (max) : (x)))
-
-#define ENABLE_VALIDATION_LAYERS
-
-#ifdef ENABLE_VALIDATION_LAYERS
-uint32_t ENABLED_LAYER_COUNT = 1;
-const char* ENABLED_LAYER_NAMES[] = {
-    "VK_LAYER_KHRONOS_validation"
-};
-#else
-uint32_t ENABLED_LAYER_COUNT = 0;
-const char** ENABLED_LAYER_NAMES = NULL;
-#endif
 
 typedef struct {
     uint32_t value;
@@ -41,11 +25,6 @@ typedef enum {
     QUEUE_FAMILY_COUNT
 } queue_family_index_t;
 typedef opt_u32_t queue_family_indices_t[QUEUE_FAMILY_COUNT];
-
-VkResult NULL_vkCreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger) { return VK_ERROR_EXTENSION_NOT_PRESENT; }
-void NULL_vkDestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator) {}
-VkResult (*vkCreateDebugUtilsMessengerEXT)(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger);
-void (*vkDestroyDebugUtilsMessengerEXT)(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator);
 
 void die(const char* format, ...) {
     va_list args;
@@ -92,10 +71,6 @@ int main() {
     GLFWwindow* window = glfwCreateWindow(800, 600, "Vulkan Triangle", NULL, NULL);
     if (window == NULL) die("glfwCreateWindow");
 
-#ifdef ENABLE_VALIDATION_LAYERS
-    printf("Validation enabled\n");
-#endif
-
     // --- CREATE INSTANCE ---
     VkInstance instance;
     {
@@ -107,27 +82,8 @@ int main() {
         app_info.engineVersion = VK_MAKE_API_VERSION(0, 1, 0, 0);
         app_info.apiVersion = VK_API_VERSION_1_0;
 
-        // Include glfw required extensions (glfwGetRequiredInstanceExtensions)
-#ifdef ENABLE_VALIDATION_LAYERS
-        uint32_t ext_count = 3;
-        const char* ext_names[] = {
-            "VK_KHR_surface",
-            "VK_KHR_win32_surface",
-            VK_EXT_DEBUG_UTILS_EXTENSION_NAME
-        };
-#else
-        uint32_t ext_count = 2;
-        const char* ext_names[] = {
-            "VK_KHR_surface",
-            "VK_KHR_win32_surface"
-        };
-#endif
-
-        printf("Required extensions: ");
-        print_strings(ext_names, ext_count, get_str);
-        printf("\nRequired layers: ");
-        print_strings(ENABLED_LAYER_NAMES, ENABLED_LAYER_COUNT, get_str);
-        printf("\n");
+        uint32_t ext_count;
+        const char** ext_names = glfwGetRequiredInstanceExtensions(&ext_count);
         // Check extension and layer availability (vkEnumerateInstanceExtensionProperties, vkEnumerateInstanceLayerProperties)
 
         VkInstanceCreateInfo create_info = {};
@@ -135,41 +91,11 @@ int main() {
         create_info.pApplicationInfo = &app_info;
         create_info.enabledExtensionCount = ext_count;
         create_info.ppEnabledExtensionNames = ext_names;
-        create_info.enabledLayerCount = ENABLED_LAYER_COUNT;
-        create_info.ppEnabledLayerNames = ENABLED_LAYER_NAMES;
-
-#ifdef ENABLE_VALIDATION_LAYERS
-        VkDebugUtilsMessengerCreateInfoEXT debug_create_info = {};
-        debug_create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-        debug_create_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-        debug_create_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-        debug_create_info.pfnUserCallback = debug_callback;
-        debug_create_info.pUserData = NULL;
-        create_info.pNext = &debug_create_info;
-#endif
+        create_info.enabledLayerCount = 0;
+        create_info.ppEnabledLayerNames = NULL;
 
         if (vkCreateInstance(&create_info, NULL, &instance) != VK_SUCCESS) die("vkCreateInstance");
     }
-
-    // --- LOAD EXTENSION FUNCTIONS ---
-    vkCreateDebugUtilsMessengerEXT = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
-    vkDestroyDebugUtilsMessengerEXT = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
-    if (vkCreateDebugUtilsMessengerEXT == NULL) vkCreateDebugUtilsMessengerEXT = NULL_vkCreateDebugUtilsMessengerEXT;
-    if (vkDestroyDebugUtilsMessengerEXT == NULL) vkDestroyDebugUtilsMessengerEXT = NULL_vkDestroyDebugUtilsMessengerEXT;
-
-    // --- CREATE DEBUG MESSENGER ---
-#ifdef ENABLE_VALIDATION_LAYERS
-    VkDebugUtilsMessengerEXT debug_messenger;
-    {
-        VkDebugUtilsMessengerCreateInfoEXT create_info = {};
-        create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-        create_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-        create_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-        create_info.pfnUserCallback = debug_callback;
-        create_info.pUserData = NULL;
-        if (vkCreateDebugUtilsMessengerEXT(instance, &create_info, NULL, &debug_messenger) != VK_SUCCESS) die("CreateDebugUtilsMessengerEXT");
-    }
-#endif
 
     // --- CREATE SURFACE ---
     VkSurfaceKHR surface;
@@ -283,8 +209,8 @@ int main() {
         create_info.ppEnabledExtensionNames = device_ext_names;
 
         // For compatibility...
-        create_info.enabledLayerCount = ENABLED_LAYER_COUNT;
-        create_info.ppEnabledLayerNames = ENABLED_LAYER_NAMES;
+        create_info.enabledLayerCount = 0;
+        create_info.ppEnabledLayerNames = NULL;
 
         if (vkCreateDevice(gpu, &create_info, NULL, &device) != VK_SUCCESS) die("vkCreateDevice");
     }
@@ -697,9 +623,8 @@ int main() {
         vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, image_available_sema, VK_NULL_HANDLE, &image_index);
 
         // Record command buffer
+        vkResetCommandBuffer(command_buffer, 0);
         {
-            vkResetCommandBuffer(command_buffer, 0);
-
             VkCommandBufferBeginInfo begin_info = {};
             begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
             begin_info.flags = 0;
@@ -802,9 +727,6 @@ int main() {
     vkDestroySwapchainKHR(device, swapchain, NULL);
     vkDestroyDevice(device, NULL);
     vkDestroySurfaceKHR(instance, surface, NULL);
-#ifdef ENABLE_VALIDATION_LAYERS
-    vkDestroyDebugUtilsMessengerEXT(instance, debug_messenger, NULL);
-#endif
     vkDestroyInstance(instance, NULL);
     glfwDestroyWindow(window);
     glfwTerminate();

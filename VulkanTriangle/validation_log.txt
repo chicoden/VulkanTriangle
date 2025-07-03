@@ -1,0 +1,53 @@
+Vulkan Development Status:
+- Vulkan Layers Controlled by "Validation" configuration
+- Environment variables:
+    - VULKAN_SDK: C:\VulkanSDK\1.3.290.0
+    - VK_LOCAL: C:\Users\Pytho\VulkanSDK
+- Vulkan Loader version: 1.4.304
+- User-Defined Layers locations:
+    - VK_LAYER_PATH variable: None
+    - Per-configuration paths: None
+    - VK_ADD_LAYER_PATH variable: None
+- `vk_layer_settings.txt` uses the default platform path:
+    C:\Users\Pytho\AppData\Local\LunarG\vkconfig\override
+- Available Layers:
+    - VK_LAYER_NV_optimus
+    - VK_LAYER_RENDERDOC_Capture
+    - VK_LAYER_NV_nomad_release_public_2024_3_0
+    - VK_LAYER_NV_GPU_Trace_release_public_2024_3_0
+    - VK_LAYER_NV_shader_debugger_release_public_2024_3_0
+    - VK_LAYER_VALVE_steam_overlay
+    - VK_LAYER_VALVE_steam_fossilize
+    - VK_LAYER_EOS_Overlay
+    - VK_LAYER_EOS_Overlay
+    - VK_LAYER_LUNARG_api_dump
+    - VK_LAYER_LUNARG_gfxreconstruct
+    - VK_LAYER_KHRONOS_synchronization2
+    - VK_LAYER_KHRONOS_validation
+    - VK_LAYER_LUNARG_monitor
+    - VK_LAYER_LUNARG_screenshot
+    - VK_LAYER_KHRONOS_profiles
+    - VK_LAYER_KHRONOS_shader_object
+    - VK_LAYER_LUNARG_crash_diagnostic (ALPHA)
+- Physical Devices:
+    - Intel(R) RaptorLake-S Mobile Graphics Controller with Vulkan 1.4.311
+        - deviceUUID: 868088A7040000000002000000000000
+        - driverUUID: 33322E302E3130312E36373930000000
+    - NVIDIA GeForce RTX 4070 Laptop GPU with Vulkan 1.3.289
+        - deviceUUID: 39BBF1A76249CFE491FBC014DACE6D70
+        - driverUUID: 97D02AA8F50D5F7D835F62C98FFF889E
+
+Launching Vulkan Application:
+- Application: vkcube
+- Executable: C:\Users\Pytho\Projects\VulkanTriangle\out\build\x64-debug\VulkanTriangle\VulkanTriangle.exe
+- Working Directory: C:\Users\Pytho\Projects\VulkanTriangle\out\build\x64-debug\VulkanTriangle
+- Command-line Arguments: --suppress_popups
+- Log file: C:\Users\Pytho\Projects\VulkanTriangle\VulkanTriangle\validation_log.txt
+VUID-vkDestroyDevice-device-05137(ERROR / SPEC): msgNum: 1215490720 - Validation Error: [ VUID-vkDestroyDevice-device-05137 ] Object 0: handle = 0x9fde6b0000000014, type = VK_OBJECT_TYPE_FENCE; | MessageID = 0x4872eaa0 | vkDestroyDevice():  OBJ ERROR : For VkDevice 0x22c137a5050[], VkFence 0x9fde6b0000000014[] has not been destroyed. The Vulkan spec states: All child objects created on device must have been destroyed prior to destroying device (https://vulkan.lunarg.com/doc/view/1.3.290.0/windows/1.3-extensions/vkspec.html#VUID-vkDestroyDevice-device-05137)
+    Objects: 1
+        [0] 0x9fde6b0000000014, type: 7, name: NULL
+Required extensions: "VK_KHR_surface", "VK_KHR_win32_surface"
+Required layers: 
+Selected GPU: NVIDIA GeForce RTX 4070 Laptop GPU
+Have VK_PRESENT_MODE_MAILBOX_KHR
+Process terminated
