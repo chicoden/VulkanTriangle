@@ -38,16 +38,10 @@ Vulkan Development Status:
         - driverUUID: 97D02AA8F50D5F7D835F62C98FFF889E
 
 Launching Vulkan Application:
-- Application: vkcube
+- Application: VulkanTriangle
 - Executable: C:\Users\Pytho\Projects\VulkanTriangle\out\build\x64-debug\VulkanTriangle\VulkanTriangle.exe
 - Working Directory: C:\Users\Pytho\Projects\VulkanTriangle\out\build\x64-debug\VulkanTriangle
-- Command-line Arguments: --suppress_popups
 - Log file: C:\Users\Pytho\Projects\VulkanTriangle\VulkanTriangle\validation_log.txt
-VUID-vkDestroyDevice-device-05137(ERROR / SPEC): msgNum: 1215490720 - Validation Error: [ VUID-vkDestroyDevice-device-05137 ] Object 0: handle = 0x9fde6b0000000014, type = VK_OBJECT_TYPE_FENCE; | MessageID = 0x4872eaa0 | vkDestroyDevice():  OBJ ERROR : For VkDevice 0x22c137a5050[], VkFence 0x9fde6b0000000014[] has not been destroyed. The Vulkan spec states: All child objects created on device must have been destroyed prior to destroying device (https://vulkan.lunarg.com/doc/view/1.3.290.0/windows/1.3-extensions/vkspec.html#VUID-vkDestroyDevice-device-05137)
-    Objects: 1
-        [0] 0x9fde6b0000000014, type: 7, name: NULL
-Required extensions: "VK_KHR_surface", "VK_KHR_win32_surface"
-Required layers: 
 Selected GPU: NVIDIA GeForce RTX 4070 Laptop GPU
 Have VK_PRESENT_MODE_MAILBOX_KHR
 Process terminated
