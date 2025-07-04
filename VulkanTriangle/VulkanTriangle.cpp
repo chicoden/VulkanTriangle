@@ -67,7 +67,7 @@ int main() {
         app_info.applicationVersion = VK_MAKE_API_VERSION(0, 1, 0, 0);
         app_info.pEngineName = "No Engine";
         app_info.engineVersion = VK_MAKE_API_VERSION(0, 1, 0, 0);
-        app_info.apiVersion = VK_API_VERSION_1_0;
+        app_info.apiVersion = VK_API_VERSION_1_3;
 
         uint32_t ext_count;
         const char** ext_names = glfwGetRequiredInstanceExtensions(&ext_count);
@@ -327,14 +327,14 @@ int main() {
         if (vkCreateImageView(device, &create_info, NULL, &swapchain_image_views[i]) != VK_SUCCESS) die("vkCreateImageView %u", i);
     }
 
-    // --- CREATE SHADER MODULE FOR VERTEX STAGE ---
-    VkShaderModule vert_shader_module;
+    // --- CREATE SHADER MODULE ---
+    VkShaderModule shader_module;
     {
         VkShaderModuleCreateInfo create_info = {};
         create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
 
-        FILE* file = fopen("../../../../VulkanTriangle/shaders/bin/vert.spv", "rb");
-        if (file == NULL) die("fopen vert");
+        FILE* file = fopen("../../../../VulkanTriangle/shaders/bin/simple.spv", "rb");
+        if (file == NULL) die("opening spirv file");
         fseek(file, 0, SEEK_END);
         create_info.codeSize = ftell(file);
 
@@ -345,32 +345,9 @@ int main() {
 
         fclose(file);
 
-        VkResult result = vkCreateShaderModule(device, &create_info, NULL, &vert_shader_module);
+        VkResult result = vkCreateShaderModule(device, &create_info, NULL, &shader_module);
         free(code);
-        if (result != VK_SUCCESS) die("vkCreateShaderModule vert");
-    }
-
-    // --- CREATE SHADER MODULE FOR FRAGMENT STAGE ---
-    VkShaderModule frag_shader_module;
-    {
-        VkShaderModuleCreateInfo create_info = {};
-        create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-
-        FILE* file = fopen("../../../../VulkanTriangle/shaders/bin/frag.spv", "rb");
-        if (file == NULL) die("fopen frag");
-        fseek(file, 0, SEEK_END);
-        create_info.codeSize = ftell(file);
-
-        uint32_t* code = alloc(uint32_t, (create_info.codeSize + 3) / 4);
-        create_info.pCode = code;
-        fseek(file, 0, SEEK_SET);
-        fread(code, sizeof(char), create_info.codeSize, file);
-
-        fclose(file);
-
-        VkResult result = vkCreateShaderModule(device, &create_info, NULL, &frag_shader_module);
-        free(code);
-        if (result != VK_SUCCESS) die("vkCreateShaderModule frag");
+        if (result != VK_SUCCESS) die("vkCreateShaderModule");
     }
 
     // --- CREATE RENDERPASS ---
@@ -434,14 +411,14 @@ int main() {
         // --- CONFIGURE VERTEX SHADER STAGE ---
         shader_stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
         shader_stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-        shader_stages[0].module = vert_shader_module;
-        shader_stages[0].pName = "main";
+        shader_stages[0].module = shader_module;
+        shader_stages[0].pName = "vertex_main";
 
         // --- CONFIGURE FRAGMENT SHADER STAGE ---
         shader_stages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
         shader_stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-        shader_stages[1].module = frag_shader_module;
-        shader_stages[1].pName = "main";
+        shader_stages[1].module = shader_module;
+        shader_stages[1].pName = "fragment_main";
 
         // --- CONFIGURE VERTEX SHADER INPUT ---
         VkPipelineVertexInputStateCreateInfo vertex_input_state = {};
@@ -701,8 +678,7 @@ int main() {
     vkDestroyPipeline(device, graphics_pipeline, NULL);
     vkDestroyPipelineLayout(device, pipeline_layout, NULL);
     vkDestroyRenderPass(device, renderpass, NULL);
-    vkDestroyShaderModule(device, frag_shader_module, NULL);
-    vkDestroyShaderModule(device, vert_shader_module, NULL);
+    vkDestroyShaderModule(device, shader_module, NULL);
 
     for (uint32_t i = 0; i < image_count; i++) {
         vkDestroyImageView(device, swapchain_image_views[i], NULL);
